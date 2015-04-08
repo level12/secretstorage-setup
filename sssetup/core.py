@@ -1,8 +1,8 @@
 import distutils.sysconfig as distutils_sysconfig
 import os
-import os.path as osp
 import pathlib
 import sysconfig
+
 
 class FatalError(Exception):
     pass
@@ -22,11 +22,22 @@ class SystemPackage(object):
     @property
     def syspy_packages_dpath(self):
         stdlib_dpath = pathlib.Path(distutils_sysconfig.get_python_lib(standard_lib=True))
-        if stdlib_dpath.joinpath('dist-packages').exists():
-            return stdlib_dpath.joinpath('dist-packages')
         if stdlib_dpath.joinpath('site-packages').exists():
             return stdlib_dpath.joinpath('site-packages')
-        self.messages.append('Couldn\'t find a dist-packages or site-packages directory in {}'
+
+        # if we didn't find site-packages, then try a Debian python3 layout. In that case,
+        # stdlib_dpath is like:
+        #
+        #    /usr/lib/python3.4
+        #
+        # But we need to get to
+        #
+        #    /usr/lib/python3/dist-packages
+        parent_dpath = stdlib_dpath.parent
+        py3_dpath = parent_dpath.joinpath('python3').joinpath('dist-packages')
+        if py3_dpath.exists():
+            return py3_dpath
+        self.messages.append('Couldn\'t find a dist-packages or site-packages directory from {}'
                              .format(stdlib_dpath))
         # todo: probably not the right behavior to return stdlib_dpath, but I don't want to throw an
         # exception at this point.
@@ -36,8 +47,15 @@ class SystemPackage(object):
         return self.syspy_packages_dpath.joinpath(dname)
 
     def syspy_so_fpath(self, identifier):
-        # todo: the file name isn't always simple like this, sometimes it's like:
+        # todo: the file name isn't always simple, sometimes it's like:
         # _dbus_glib_bindings.cpython-34m-x86_64-linux-gnu.so
+        fname = '{}.{}-{}.so'.format(identifier, sysconfig.get_config_var('SOABI'),
+                                     sysconfig.get_config_var('MULTIARCH'))
+        if self.syspy_packages_dpath.joinpath(fname).exists():
+            return self.syspy_packages_dpath.joinpath(fname)
+        self.messages.append('Didn\'t find platform specific .so {}, assuming "plain" file exists'
+                             .format(fname))
+
         fname = '{}.so'.format(identifier)
         return self.syspy_packages_dpath.joinpath(fname)
 
@@ -66,7 +84,7 @@ class SystemPackage(object):
     def link_to(self, target_dpath):
         if not self.available:
             raise FatalError('Package {} is unavailable, run `ss-setup status -v` command for'
-                             ' more info.')
+                             ' more info.'.format(self.package))
         for fspath in self.file_system_paths():
             target_fpath = pathlib.Path(target_dpath, fspath.name)
             if target_fpath.exists():
