@@ -8,7 +8,7 @@ def cli():
     pass
 
 
-@cli.command()
+@cli.command(short_help='Display status of secret storage setup.')
 @click.option('--verbose', '-v', is_flag=True, default=False)
 def status(verbose):
     status = Status(verbose)
@@ -16,7 +16,7 @@ def status(verbose):
         click.echo(message)
 
 
-@cli.command(short_help='link system packages into the current virtualenv')
+@cli.command(short_help='Link system packages into the current virtualenv.')
 @click.option('--verbose', '-v', is_flag=True, default=False)
 @click.pass_context
 def link(ctx, verbose):
