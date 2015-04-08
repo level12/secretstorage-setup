@@ -22,10 +22,15 @@ class SystemPackage(object):
     @property
     def syspy_packages_dpath(self):
         stdlib_dpath = pathlib.Path(distutils_sysconfig.get_python_lib(standard_lib=True))
+
+        # Try dist-packages first since our most frequent use case will be looking for system
+        # installed packages.
+        if stdlib_dpath.joinpath('dist-packages').exists():
+            return stdlib_dpath.joinpath('dist-packages')
         if stdlib_dpath.joinpath('site-packages').exists():
             return stdlib_dpath.joinpath('site-packages')
 
-        # if we didn't find site-packages, then try a Debian python3 layout. In that case,
+        # if we didn't find the folder above, then try a Debian python3 layout. In that case,
         # stdlib_dpath is like:
         #
         #    /usr/lib/python3.4
