@@ -24,7 +24,7 @@ if sys.version_info[0] == 2:
 
 
 setup(
-    name="SecretStorage Setup",
+    name="SecretStorage-Setup",
     version=version_globals['VERSION'],
     description=('Ease setup of SecretStorage in virtualenvs'),
     long_description='\n\n'.join((README, CHANGELOG)),
@@ -32,7 +32,7 @@ setup(
     author_email="randy.syring@level12.io",
     url='https://github.com/level12/secretstorage-setup',
     classifiers=[
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: BSD License',
         'Operating System :: POSIX :: Linux',
