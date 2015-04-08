@@ -59,7 +59,7 @@ system packages::
 Dependencies
 ============
 
-`SecretStorage` is dependent on:
+`SecretStorage`_ is dependent on:
 
 * `dbus-python`_
 * PyCrypto_

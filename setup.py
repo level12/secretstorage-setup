@@ -26,7 +26,7 @@ if sys.version_info[0] == 2:
 setup(
     name="SecretStorage Setup",
     version=version_globals['VERSION'],
-    description=(''),
+    description=('Ease setup of SecretStorage in virtualenvs'),
     long_description='\n\n'.join((README, CHANGELOG)),
     author="Randy Syring",
     author_email="randy.syring@level12.io",
