@@ -1,1 +1,3 @@
-from .cli import cli 
+from .cli import cli
+
+cli  # silence flake8
