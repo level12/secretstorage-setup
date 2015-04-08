@@ -5,7 +5,7 @@ SecretStorage Setup Introduction
 
 SecretStorage Setup is a small project and command line utility to facilitate the setup
 of `SecretStorage`_ in a `virtualenv`_. It was created primarily to make it easy for developers to
-use the SecretStorage backend in `keyring_`.
+use the SecretStorage backend in `keyring`_.
 
 .. _virtualenv: https://virtualenv.pypa.io/en/latest/
 .. _keyring: https://pypi.python.org/pypi/keyring
