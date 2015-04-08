@@ -34,7 +34,15 @@ like::
     Crypto package...not installed for this python
     secretstorage package...not installed for this python
 
-In which case, you should see "Dependencies" below for further help.
+In which case, you should see "Dependencies" below for further help. Additionally, you can run with
+`-v` to get more info from the status command::
+
+    $ ss-setup status -v
+    dbus package...not installed for this python
+    Crypto package...not installed for this python
+    secretstorage package...not installed for this python
+    Troubleshooting messages follow:
+    <...snip...>
 
 Linking System Dependencies
 ---------------------------
