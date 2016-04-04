@@ -94,8 +94,8 @@ class SystemPackage(object):
             target_fpath = pathlib.Path(target_dpath, fspath.name)
             if target_fpath.exists():
                 if not target_fpath.is_symlink():
-                    raise FatalError('Target path for linking exists, but is not a symlink: {}'
-                                     .format(target_fpath))
+                    self.messages.append('path already exists, assuming local package available: {}'.format(target_fpath))
+                    continue
                 target_fpath.unlink()
             target_fpath.symlink_to(fspath)
             self.messages.append('linked {} to {}'.format(target_fpath, fspath))
