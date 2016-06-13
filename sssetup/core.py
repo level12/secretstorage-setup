@@ -2,13 +2,82 @@ import distutils.sysconfig as distutils_sysconfig
 import os
 import pathlib
 import sysconfig
+import sys
 
 
 class FatalError(Exception):
     pass
 
 
-class SystemPackage(object):
+class MessageLogger(object):
+    def __init__(self):
+        self.messages = []
+        self.init()
+
+    def init(self):
+        pass
+
+    def log(self, msg):
+        self.messages.append(msg)
+
+    @property
+    def label(self):
+        return NotImplemented
+
+
+class SystemSetup(MessageLogger):
+
+    def init(self):
+        """
+            Determine where the
+        """
+        self.uses_major_version_package_dpath = False
+        self.dist_packages_dpath = None
+        self.site_packages_dpath = None
+
+        # See stuff like:
+        #  /usr/lib/python3.5
+        #  /opt/python34/lib/python3.4
+        #  /usr/lib/python2.7
+        stdlib_dpath = pathlib.Path(distutils_sysconfig.get_python_lib(standard_lib=True))
+        self.log('Stdlib directory: {}'.format(stdlib_dpath))
+
+        # See if we are dealing with a Python that stores files in a major version directory
+        # path like:
+        # /usr/lib/python3/dist-packages
+        dist_packages_dpath = stdlib_dpath.joinpath('dist-packages')
+        if dist_packages_dpath.exists():
+            self.dist_packages_dpath = dist_packages_dpath
+            self.log('dist-packages directory: {}'.format(dist_packages_dpath))
+        else:
+            minor_version_dpath, _ = str(stdlib_dpath).rsplit('.', 1)
+            minor_version_dist_packages_dpath = pathlib.Path(minor_version_dpath, 'dist-packages')
+            if minor_version_dist_packages_dpath.exists():
+                self.uses_major_version_package_dpath = True
+                self.dist_packages_dpath = minor_version_dist_packages_dpath
+                self.log('dist-packages directory: {}'.format(minor_version_dist_packages_dpath))
+
+        # Look for the site-packages directory.
+        site_packages_dpath = stdlib_dpath.joinpath('site-packages')
+        if site_packages_dpath.exists():
+            self.site_packages_dpath = site_packages_dpath
+            self.log('site-packages directory: {}'.format(site_packages_dpath))
+
+        # Look for the /usr/local/lib version if applicable.
+        stdlib_strpath = str(stdlib_dpath)
+        if stdlib_strpath.startswith('/usr/lib/python'):
+            stdlib_strpath = stdlib_strpath.replace('/usr/lib/', '/usr/local/lib/')
+            site_packages_dpath = pathlib.Path(stdlib_strpath, 'site-packages')
+            if site_packages_dpath.exists():
+                self.site_packages_dpath = site_packages_dpath
+                self.log('site-packages directory: {}'.format(site_packages_dpath))
+
+    @property
+    def label(self):
+        return 'system'
+
+
+class SystemPackage(MessageLogger):
     """
         Assuming you are in a virtualenv, this class can find shared object files and directories
         in the system python's site packages area.  Presumably as a precursor to linking them into
@@ -16,53 +85,53 @@ class SystemPackage(object):
     """
     shared_objects = ()
 
-    def __init__(self):
+    def __init__(self, system_setup):
         self.messages = []
+        self.system_setup = system_setup
+        self._package_dpath = None
+        self.use_multiarch_fnames = False
 
     @property
-    def syspy_packages_dpath(self):
-        stdlib_dpath = pathlib.Path(distutils_sysconfig.get_python_lib(standard_lib=True))
+    def label(self):
+        return self.package
 
-        # Try dist-packages first since our most frequent use case will be looking for system
-        # installed packages.
-        if stdlib_dpath.joinpath('dist-packages').exists():
-            return stdlib_dpath.joinpath('dist-packages')
-        if stdlib_dpath.joinpath('site-packages').exists():
-            return stdlib_dpath.joinpath('site-packages')
+    def locate_package_dpath(self):
+        """
+            Determine where we will find this package: in dist-packages or site-packages.
+        """
+        dpath = self.system_setup.site_packages_dpath.joinpath(self.package)
+        if dpath.exists():
+            return self.system_setup.site_packages_dpath
+        dpath = self.system_setup.dist_packages_dpath.joinpath(self.package)
+        if dpath.exists():
+            if self.system_setup.uses_major_version_package_dpath:
+                self.use_multiarch_fnames = True
+            return self.system_setup.dist_packages_dpath
+        # Couldn't find package directory, return False to indicate this.
+        return False
 
-        # if we didn't find the folder above, then try a Debian python3 layout. In that case,
-        # stdlib_dpath is like:
-        #
-        #    /usr/lib/python3.4
-        #
-        # But we need to get to
-        #
-        #    /usr/lib/python3/dist-packages
-        parent_dpath = stdlib_dpath.parent
-        py3_dpath = parent_dpath.joinpath('python3').joinpath('dist-packages')
-        if py3_dpath.exists():
-            return py3_dpath
-        self.messages.append('Couldn\'t find a dist-packages or site-packages directory from {}'
-                             .format(stdlib_dpath))
-        # todo: probably not the right behavior to return stdlib_dpath, but I don't want to throw an
-        # exception at this point.
-        return stdlib_dpath
+    def package_dpath(self):
+        """
+            Cached version of locate_package_dpath()
+        """
+        # We have already looked for the package and can't find it.
+        if self._package_dpath is False:
+            return None
+        if self._package_dpath is None:
+            self._package_dpath = self.locate_package_dpath()
+        return self._package_dpath
 
     def syspy_dpath(self, dname):
-        return self.syspy_packages_dpath.joinpath(dname)
+        return self.package_dpath().joinpath(dname)
 
     def syspy_so_fpath(self, identifier):
-        # todo: the file name isn't always simple, sometimes it's like:
-        # _dbus_glib_bindings.cpython-34m-x86_64-linux-gnu.so
-        fname = '{}.{}-{}.so'.format(identifier, sysconfig.get_config_var('SOABI'),
-                                     sysconfig.get_config_var('MULTIARCH'))
-        if self.syspy_packages_dpath.joinpath(fname).exists():
-            return self.syspy_packages_dpath.joinpath(fname)
-        self.messages.append('Didn\'t find platform specific .so {}, assuming "plain" file exists'
-                             .format(fname))
+        if self.use_multiarch_fnames:
+            fname = '{}.{}-{}.so'.format(identifier, sysconfig.get_config_var('SOABI'),
+                                         sysconfig.get_config_var('MULTIARCH'))
+        else:
+            fname = '{}.so'.format(identifier)
 
-        fname = '{}.so'.format(identifier)
-        return self.syspy_packages_dpath.joinpath(fname)
+        return self.package_dpath().joinpath(fname)
 
     def file_system_paths(self):
         paths = [self.syspy_so_fpath(ident) for ident in self.shared_objects]
@@ -90,6 +159,7 @@ class SystemPackage(object):
         if not self.available:
             raise FatalError('Package {} is unavailable, run `ss-setup status -v` command for'
                              ' more info.'.format(self.package))
+
         for fspath in self.file_system_paths():
             target_fpath = pathlib.Path(target_dpath, fspath.name)
             if target_fpath.exists():
@@ -144,38 +214,40 @@ class SecretStorage(SystemPackage):
             return False
 
 
-class Status(object):
+class Action(MessageLogger):
     def __init__(self, verbose):
-        self.packages = DBUSPackage(), CryptoPackage(), SecretStorage()
+        super(Action, self).__init__()
+        self.system_setup = system_setup = SystemSetup()
+        self.packages = DBUSPackage(system_setup), CryptoPackage(system_setup), \
+            SecretStorage(system_setup)
         self.verbose = verbose
 
-    def messages(self):
-        for package in self.packages:
-            yield package.status
+    def yield_messages(self):
+        for message in self.messages:
+            yield message
         if self.verbose:
             yield 'Troubleshooting messages follow:'
-            for package in self.packages:
-                for message in package.messages:
-                    yield '    {}: {}'.format(package.package, message)
+            for msg_logger in [self.system_setup] + list(self.packages):
+                for message in msg_logger.messages:
+                    yield '    {}: {}'.format(msg_logger.label, message)
 
+class Status(Action):
+    def run(self):
+        for package in self.packages:
+            self.log(package.status)
 
-class Linker(object):
-
-    def __init__(self, verbose):
-        self.packages = DBUSPackage(), CryptoPackage(), SecretStorage()
-        self.verbose = verbose
-        self._messages = []
+class Linker(Action):
 
     def run(self):
         venv_dpath = os.environ.get('VIRTUAL_ENV')
         if venv_dpath is None:
-            self._messages.append('Error: not not in a virtualenv.')
+            self.log('Error: not not in a virtualenv.')
             return
 
         venv_lib_dpath = distutils_sysconfig.get_python_lib()
 
         if self.verbose:
-            self._messages.append('Virtualenv site-packages directory: {}'.format(venv_lib_dpath))
+            self.log.append('Virtualenv site-packages directory: {}'.format(venv_lib_dpath))
 
         for package in self.packages:
             package.link_to(venv_lib_dpath)
@@ -187,6 +259,9 @@ class Linker(object):
             yield message
         if self.verbose:
             yield 'More information follows:'
+            for message in self.system_setup.logs:
+                yield '    system: {}'.format(message)
+
             for package in self.packages:
                 for message in package.messages:
                     yield '    {}: {}'.format(package.package, message)

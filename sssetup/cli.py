@@ -12,7 +12,8 @@ def cli():
 @click.option('--verbose', '-v', is_flag=True, default=False)
 def status(verbose):
     status = Status(verbose)
-    for message in status.messages():
+    status.run()
+    for message in status.yield_messages():
         click.echo(message)
 
 
@@ -24,7 +25,7 @@ def link(ctx, verbose):
         linker = Linker(verbose)
         if linker.run():
             click.echo('linking successful, run the status command to verify')
-        for message in linker.messages():
+        for message in linker.yield_messages():
             click.echo(message)
     except FatalError as e:
         ctx.fail(str(e))
